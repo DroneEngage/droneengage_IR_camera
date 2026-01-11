@@ -51,7 +51,7 @@ message(STATUS "OpenCV_INCLUDE_DIRS found: ${OpenCV_INCLUDE_DIRS}")
 option(DDEBUG "Detailed Debug" OFF) # Default is OFF
 
 
-include_directories( ${OpenCV_INCLUDE_DIRS} )
+include_directories( ${OpenCV_INCLUDE_DIRS} "./src/driver" )
 
 
 
@@ -93,15 +93,16 @@ add_compile_definitions(
 
 # Gather all source files
 file(GLOB folder_src "./src/*.cpp")
-file(GLOB folder_tracker "./src/tracker/*.cpp")
+file(GLOB folder_tracker "./src/ir_tracker/*.cpp")
+file(GLOB folder_driver "./src/driver/*.cpp")
 file(GLOB folder_uavos "./src/de_common/*.cpp")
 file(GLOB folder_uavos1 "./src/de_common/de_databus/*.cpp")
 file(GLOB folder_uavos2 "./src/de_common/helpers/*.cpp")
-set(files ${folder_src} ${folder_uavos} ${folder_uavos1} ${folder_uavos2} ${folder_tracker})
+set(files ${folder_src} ${folder_uavos} ${folder_uavos1} ${folder_uavos2} ${folder_tracker} ${folder_driver})
 
 # Add the executable target and link its libraries
 add_executable(OUTPUT_BINARY ${files})
-target_link_libraries(OUTPUT_BINARY Threads::Threads ${OpenCV_LIBS})
+target_link_libraries(OUTPUT_BINARY Threads::Threads ${OpenCV_LIBS} serialport)
 
 # Conditionally define DDEBUG based on the DDEBUG option
 target_compile_definitions(OUTPUT_BINARY PRIVATE

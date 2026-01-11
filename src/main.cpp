@@ -41,8 +41,8 @@ std::string  ModuleKey;
 
 int AndruavServerConnectionStatus = SOCKET_STATUS_FREASH;
 
-de::ir_tracker::CIRTrackerMain& cAICameraMain = de::ir_tracker::CIRTrackerMain::getInstance();
-de::ir_tracker::CIRTrackerAndruavMessageParser& cAICameraAndruavMessageParser = de::ir_tracker::CIRTrackerAndruavMessageParser::getInstance();
+de::ir_tracker::CIRTrackerMain& cIRTrackerMain = de::ir_tracker::CIRTrackerMain::getInstance();
+de::ir_tracker::CIRTrackerAndruavMessageParser& cIRTrackerAndruavMessageParser = de::ir_tracker::CIRTrackerAndruavMessageParser::getInstance();
 
 
 de::CConfigFile& cConfigFile = de::CConfigFile::getInstance();
@@ -140,7 +140,7 @@ void onReceive (const char * message, int len, Json_de jMsg)
         }
     }
     
-    cAICameraAndruavMessageParser.parseMessage(jMsg, message, len);
+    cIRTrackerAndruavMessageParser.parseMessage(jMsg, message, len);
     
 }
 
@@ -162,9 +162,13 @@ void initArguments (int argc, char *argv[])
         {"help",           false,  0, 'h'},
         {0, false, 0, 0}
     };
+    // adding ':' means there is extra parameter needed
     GetOptLong gopt(argc, argv, "c:vh",
                     options);
 
+    /*
+      parse command line options
+     */
     while ((opt = gopt.getoption()) != -1) {
         switch (opt) {
         case 'c':
@@ -223,6 +227,7 @@ void initDEModule(int argc, char *argv[])
         std::cout << _LOG_CONSOLE_BOLD_TEXT << "WARNING:" << _INFO_CONSOLE_TEXT << " MISSING FIELD " << _ERROR_CONSOLE_BOLD_TEXT_ << "s2s_udp_packet_size " <<  _INFO_CONSOLE_TEXT << "is missing in config file. default value " << _ERROR_CONSOLE_BOLD_TEXT_  << std::to_string(DEFAULT_UDP_DATABUS_PACKET_SIZE) <<  _INFO_CONSOLE_TEXT <<  " is used." << _NORMAL_CONSOLE_TEXT_ << std::endl;    
     }
     
+    // UDP Server
     cModule.init(jsonConfig["s2s_udp_target_ip"].get<std::string>(),
             std::stoi(jsonConfig["s2s_udp_target_port"].get<std::string>().c_str()),
             jsonConfig["s2s_udp_listening_ip"].get<std::string>() ,
@@ -239,14 +244,20 @@ void init (int argc, char *argv[])
     
     instance_time_stamp = std::time(nullptr);
 
+    // 1- initialize module
     initArguments (argc, argv);
 
+    // 2- initialize serial
     initSerial();
 
+    // Reading Configuration
     std::cout << std::endl << _SUCCESS_CONSOLE_BOLD_TEXT_ << "=================== " << "STARTING PLUGIN ===================" << _NORMAL_CONSOLE_TEXT_ << std::endl;
     _version();
 
     std::cout << _LOG_CONSOLE_BOLD_TEXT << std::asctime(std::localtime(&instance_time_stamp)) << instance_time_stamp << _INFO_CONSOLE_BOLD_TEXT<< " seconds since the Epoch" << std::endl;
+    
+
+    // Define module features
     
     cConfigFile.initConfigFile (configName.c_str());
     cLocalConfigFile.InitConfigFile (localConfigName.c_str());
@@ -259,20 +270,26 @@ void init (int argc, char *argv[])
         cLocalConfigFile.apply();
     }
 
-    cAICameraMain.init();
+    cIRTrackerMain.init();
 
+    // should be last
     initDEModule (argc,argv);
 }
 
 
 void uninit ()
 {
-    cAICameraMain.uninit();
+    cIRTrackerMain.uninit();
 	m_exit = true;
 
+    // end program here
 	exit(0);
 }
 
+// ------------------------------------------------------------------------------
+//   Quit Signal Handler
+// ------------------------------------------------------------------------------
+// this function is called when you press Ctrl-C
 void quit_handler( int sig )
 {
 	std::cout << _INFO_CONSOLE_TEXT << std::endl << "TERMINATING AT USER REQUEST" <<  _NORMAL_CONSOLE_TEXT_ << std::endl;
@@ -294,8 +311,10 @@ int main (int argc, char *argv[])
         std::cout << _INFO_CONSOLE_BOLD_TEXT << " ========================== DDEBUG ENABLED =========================="   << _NORMAL_CONSOLE_TEXT_ << std::endl;
     #endif
 	
+    // Disable synchronization between C and C++ standard streams
     std::ios_base::sync_with_stdio(false);
 
+    // Optionally, untie cin from cout for further speedup (especially with lots of cin/cout alternating)
     std::cin.tie(nullptr);
 
     init(argc, argv);

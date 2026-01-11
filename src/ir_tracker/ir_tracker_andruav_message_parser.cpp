@@ -2,7 +2,7 @@
 #include "../de_common/de_databus/messages.hpp"
 #include "ir_tracker_andruav_message_parser.hpp"
 
-using namespace de::tracker;
+using namespace de::ir_tracker;
 
 
 
@@ -35,6 +35,7 @@ void CIRTrackerAndruavMessageParser::parseCommand(Json_de &andruav_message, cons
         //TODO: LATER
     }
     break;
+    }
 }
 
 /**

@@ -30,7 +30,7 @@ void CIRTracker_Facade::sendTrackingTargetStatus(
       de::ir_tracker::CIRTrackerMain::getInstance();
 
   const uint8_t tracking_camera_direction =
-      m_ir_camera_main.getTrackingCameraDirection();
+      m_tracker_main.getTrackingCameraDirection();
   Json_de message = {
       {"a", status},
       {"b", tracking_camera_direction}
