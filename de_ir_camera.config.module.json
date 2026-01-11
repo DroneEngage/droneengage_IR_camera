@@ -1,0 +1,32 @@
+{
+    // A name and GUID for this module
+    "module_id": "IR_CAMERA",
+    "s2s_udp_target_ip": "127.0.0.1",
+    "s2s_udp_target_port": "60000",
+    "s2s_udp_listening_ip": "127.0.0.1",
+    "s2s_udp_listening_port": "60054",
+    "s2s_udp_packet_size": "8192",
+
+
+    "camera": {
+        // Specific Module Parameters
+        //"source_video_device"               : "/dev/video1",
+        //"output_video_device": "/dev/video3"
+        "source_video_device_name"          : "SIM-CAM1", //"C270 HD WEBCAM",  // DE-RPI,DE-THERMAL,
+        "output_video_device_name"          : "DE-TRK"
+        //"desired_input_width"               : 1280,
+        //"desired_input_height"              : 720
+    },
+    "tracking": {
+        "tracker_algorithm_index": 7,
+        "camera_orientation": 0, // 0b0000 bit:0 horizontal/vertical, bits1,2: rotation (0,90,180,270)
+        "camera_flipped": false,
+        "tracking_camera_direction": 1  // none, front , back , down , up 
+    },
+    // Advanced Parameters:
+    "advanced_tracking": {
+        "frames_to_skip_between_messages": 3, //optional default: 15
+        "frame_to_skip_between_track_process": 2, //optional default: 5
+        "ema_alpha_base": 0.3
+    }
+}

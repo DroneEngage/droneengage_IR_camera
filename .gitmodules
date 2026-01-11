@@ -1,0 +1,3 @@
+[submodule "droneengage_common"]
+	path = src/de_common
+	url = https://github.com/DroneEngage/droneengage_common.git
