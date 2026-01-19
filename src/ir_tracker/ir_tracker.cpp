@@ -177,8 +177,8 @@ bool CIRTracker::initTargetVirtualVideoDevice(const std::string& output_video_de
 
     {
         std::lock_guard<std::mutex> lock(g_frame_mutex);
-        m_image_width = g_thermal_frame.cols;
-        m_image_height = g_thermal_frame.rows;
+        m_thermal_width = g_thermal_frame.cols;
+        m_thermal_height = g_thermal_frame.rows;
     }
 
     // Determine output dimensions based on mode
@@ -189,9 +189,12 @@ bool CIRTracker::initTargetVirtualVideoDevice(const std::string& output_video_de
         output_height = m_rgb_height;
     } else {
         // Use IR camera dimensions for IR-only mode
-        output_width = m_image_width;
-        output_height = m_image_height;
+        output_width = m_thermal_width;
+        output_height = m_thermal_height;
     }
+    
+    m_image_width = output_width;
+    m_image_height = output_height;
 
     struct v4l2_format fmt = {0};
     fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -320,6 +323,10 @@ void CIRTracker::onThermalFrame(const std::vector<float>& temperatures,
 
     // Rotate 90 degrees clockwise
     cv::rotate(g_thermal_frame, g_thermal_frame, cv::ROTATE_90_CLOCKWISE);
+
+    // Update thermal dimensions after rotation (cols and rows are swapped)
+    m_thermal_width = g_thermal_frame.cols;
+    m_thermal_height = g_thermal_frame.rows;
 
     g_frame_ready = true;
 }
@@ -489,6 +496,10 @@ void CIRTracker::processIRFrames() {
         const bool should_skip_message = (frame_counter % m_frames_to_skip_between_messages) != 0;
         
         if (m_callback_tracker && !should_skip_message) {
+            std::cout << "Thermal dims: " << m_thermal_width << "x" << m_thermal_height 
+                      << " | Hot px: (" << hot_point.x << "," << hot_point.y << ")"
+                      << " | Cold px: (" << cold_point.x << "," << cold_point.y << ")" << std::endl;
+            
             m_callback_tracker->onHotColdPoints(
                 revScaleX(hot_point.x), revScaleY(hot_point.y),
                 revScaleX(cold_point.x), revScaleY(cold_point.y),
@@ -626,11 +637,11 @@ void CIRTracker::processIRFrames() {
 }
 
 float CIRTracker::revScaleX(const float& x) const {
-    return (x / m_image_width);
+    return (x / m_thermal_width);
 }
 
 float CIRTracker::revScaleY(const float& y) const {
-    return (y / m_image_height);
+    return (y / m_thermal_height);
 }
 
 // Dual camera helper methods implementation

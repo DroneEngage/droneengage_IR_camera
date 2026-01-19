@@ -386,11 +386,11 @@ void CIRTrackerMain::onHotColdPoints(const float& hot_x, const float& hot_y,
   }
 
   // Convert to centered coordinates [-0.5 to 0.5]
-  double hot_center_x = -0.5 + hot_x;
-  double hot_center_y = -0.5 + hot_y;
-  double cold_center_x = -0.5 + cold_x;
-  double cold_center_y = -0.5 + cold_y;
-
+  double hot_center_x = hot_x - 0.5;
+  double hot_center_y = hot_y - 0.5;
+  double cold_center_x = cold_x - 0.5;
+  double cold_center_y = cold_y - 0.5;
+ m_ema_cold_init = false;
   // Apply EMA smoothing for hot point
   if (!m_ema_hot_init) {
     m_ema_hot_x = hot_center_x;
@@ -404,7 +404,7 @@ void CIRTrackerMain::onHotColdPoints(const float& hot_x, const float& hot_y,
     m_ema_hot_y = alpha_hot * hot_center_y + (1.0 - alpha_hot) * m_ema_hot_y;
   }
 
-  // Apply EMA smoothing for cold point
+  // // Apply EMA smoothing for cold point
   if (!m_ema_cold_init) {
     m_ema_cold_x = cold_center_x;
     m_ema_cold_y = cold_center_y;
@@ -416,6 +416,9 @@ void CIRTrackerMain::onHotColdPoints(const float& hot_x, const float& hot_y,
     m_ema_cold_x = alpha_cold * cold_center_x + (1.0 - alpha_cold) * m_ema_cold_x;
     m_ema_cold_y = alpha_cold * cold_center_y + (1.0 - alpha_cold) * m_ema_cold_y;
   }
+
+  std::cout << "Hot: (" << m_ema_hot_x << ", " << m_ema_hot_y << ") "
+            << "Cold: (" << m_ema_cold_x << ", " << m_ema_cold_y << ")" << std::endl;
 
   double delta_hot_x, delta_hot_y, delta_hot_z = 0.0;
   double delta_cold_x, delta_cold_y, delta_cold_z = 0.0;

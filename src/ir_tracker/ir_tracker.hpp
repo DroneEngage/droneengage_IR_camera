@@ -131,6 +131,9 @@ private:
     int m_image_width = 640;
     int m_image_height = 480;
     
+    int m_thermal_width = 80;
+    int m_thermal_height = 62;
+    
     uint32_t m_target_fps = 30;
     
     std::thread m_framesThread;
