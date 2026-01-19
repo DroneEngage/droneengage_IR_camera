@@ -51,7 +51,10 @@ message(STATUS "OpenCV_INCLUDE_DIRS found: ${OpenCV_INCLUDE_DIRS}")
 option(DDEBUG "Detailed Debug" OFF) # Default is OFF
 
 
-include_directories( ${OpenCV_INCLUDE_DIRS} "./src/driver" )
+# Find mi48 library
+find_package(mi48 REQUIRED PATHS $ENV{HOME}/.local/lib/cmake/mi48)
+
+include_directories( ${OpenCV_INCLUDE_DIRS} ${MI48_INCLUDE_DIRS} )
 
 
 
@@ -94,15 +97,14 @@ add_compile_definitions(
 # Gather all source files
 file(GLOB folder_src "./src/*.cpp")
 file(GLOB folder_tracker "./src/ir_tracker/*.cpp")
-file(GLOB folder_driver "./src/driver/*.cpp")
 file(GLOB folder_uavos "./src/de_common/*.cpp")
 file(GLOB folder_uavos1 "./src/de_common/de_databus/*.cpp")
 file(GLOB folder_uavos2 "./src/de_common/helpers/*.cpp")
-set(files ${folder_src} ${folder_uavos} ${folder_uavos1} ${folder_uavos2} ${folder_tracker} ${folder_driver})
+set(files ${folder_src} ${folder_uavos} ${folder_uavos1} ${folder_uavos2} ${folder_tracker})
 
 # Add the executable target and link its libraries
 add_executable(OUTPUT_BINARY ${files})
-target_link_libraries(OUTPUT_BINARY Threads::Threads ${OpenCV_LIBS} serialport)
+target_link_libraries(OUTPUT_BINARY Threads::Threads ${OpenCV_LIBS} mi48::mi48_static serialport)
 
 # Conditionally define DDEBUG based on the DDEBUG option
 target_compile_definitions(OUTPUT_BINARY PRIVATE

@@ -214,23 +214,21 @@ bool CIRTrackerMain::readConfigParameters() {
     }
 
     // Fallback to direct path if name not found or not specified
-    if (m_output_video_device.empty()) {
-      if (!camera.contains("output_video_device")) {
-        std::cout << _ERROR_CONSOLE_BOLD_TEXT_
-                  << "FATAL ERROR:" << _INFO_CONSOLE_TEXT
-                  << " No output_video_device specified in config.json"
-                  << _NORMAL_CONSOLE_TEXT_ << std::endl;
-        return false;
-      } else {
-        m_output_video_device =
-            camera["output_video_device"].get<std::string>();
-
-        std::cout << _SUCCESS_CONSOLE_BOLD_TEXT_
-                  << "Using output_video_device:" << _INFO_CONSOLE_BOLD_TEXT
-                  << m_output_video_device << _NORMAL_CONSOLE_TEXT_
-                  << std::endl;
-      }
+    if (m_output_video_device.empty() && camera.contains("output_video_device")) {
+      m_output_video_device = camera["output_video_device"].get<std::string>();
+      std::cout << _SUCCESS_CONSOLE_BOLD_TEXT_
+                << "Using output_video_device:" << _INFO_CONSOLE_BOLD_TEXT
+                << m_output_video_device << _NORMAL_CONSOLE_TEXT_
+                << std::endl;
     }
+    
+    // output_video_device is optional - can be empty if only displaying
+    if (m_output_video_device.empty()) {
+      std::cout << _LOG_CONSOLE_BOLD_TEXT
+                << "No output_video_device specified - display-only mode"
+                << _NORMAL_CONSOLE_TEXT_ << std::endl;
+    }
+
   } else {
     std::cout << _ERROR_CONSOLE_BOLD_TEXT_
               << "FATAL ERROR:" << _INFO_CONSOLE_TEXT
@@ -282,6 +280,18 @@ bool CIRTrackerMain::readConfigParameters() {
     m_display_enabled = dual_camera.value("display", false);
     m_display_mode = dual_camera.value("display_mode", 3);
     
+    // If no video source device is available, force IR-only mode but keep display for IR
+    if (m_source_video_device.empty()) {
+      if (m_dual_camera_enabled) {
+        std::cout << _ERROR_CONSOLE_BOLD_TEXT_
+                  << "WARNING: " << _INFO_CONSOLE_TEXT
+                  << "No video source device available (source_video_device or source_video_device_name). "
+                  << "Disabling dual_camera mode and using IR-only mode."
+                  << _NORMAL_CONSOLE_TEXT_ << std::endl;
+      }
+      m_dual_camera_enabled = false;
+    }
+    
     std::cout << _LOG_CONSOLE_BOLD_TEXT
               << "Dual camera enabled: " << _INFO_CONSOLE_BOLD_TEXT
               << (m_dual_camera_enabled ? "true" : "false")
@@ -305,6 +315,17 @@ bool CIRTrackerMain::readConfigParameters() {
                 << ", offset_y: " << m_calib_offset_y
                 << ", rotation: " << m_calib_rotation
                 << ", alpha: " << m_calib_alpha
+                << _NORMAL_CONSOLE_TEXT_ << std::endl;
+    }
+  }
+
+  // Check for no_display override in camera config (after dual_camera settings)
+  if (m_jsonConfig.contains("camera")) {
+    Json_de camera = m_jsonConfig["camera"];
+    if (camera.contains("no_display") && camera["no_display"].get<bool>()) {
+      m_display_enabled = false;
+      std::cout << _LOG_CONSOLE_BOLD_TEXT
+                << "Display disabled by camera.no_display setting"
                 << _NORMAL_CONSOLE_TEXT_ << std::endl;
     }
   }

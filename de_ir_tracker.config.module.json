@@ -10,13 +10,14 @@
 
     "camera": {
         // Specific Module Parameters
-        "source_video_device"               : "/dev/video0",
-        //"output_video_device": "/dev/video3"
+        "source_video_device": "/dev/video0",
+        //"output_video_device": "/dev/video5",
         //"source_video_device_name": "SIM-CAM1",
         "source_ir_port": "/dev/ttyACM0",
-        "output_video_device_name": "DE-TRK",
-        "desired_input_width": 1280,
-        "desired_input_height": 720
+        //"output_video_device_name": "DE-TRK",
+        "desired_input_width": 800,
+        "desired_input_height": 600,
+        "no_display": false
     },
 
     "dual_camera": {

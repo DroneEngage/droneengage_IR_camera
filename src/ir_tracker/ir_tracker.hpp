@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "../driver/serial_mi48.hpp"
+#include "serial_mi48.hpp"
 
 #define DEF_TRACK_ORIENTATION_DEG_0 0
 #define DEF_TRACK_ORIENTATION_DEG_90 1
@@ -144,6 +144,8 @@ private:
     int m_display_mode = 3;  // 1=separate, 2=side-by-side, 3=overlay, 4=pip
     cv::VideoCapture m_rgb_capture;
     std::string m_source_video_device;
+    int m_rgb_width = 0;
+    int m_rgb_height = 0;
     CalibrationParams m_calib_params;
 };
 

@@ -20,14 +20,13 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-// Include MI48 library
-#include "../../../mi48_lib_c/serial_mi48.hpp"
 
 using namespace de::ir_tracker;
 
 // Global state for thermal frame handling
 std::mutex g_frame_mutex;
 cv::Mat g_thermal_frame;
+std::vector<float> g_thermal_temperatures;
 uint16_t g_thermal_rows = 0;
 uint16_t g_thermal_cols = 0;
 std::atomic<bool> g_frame_ready{false};
@@ -63,11 +62,21 @@ bool CIRTracker::init(const std::string& thermal_port,
                       << "WARNING: Failed to initialize RGB camera, disabling dual camera mode"
                       << _NORMAL_CONSOLE_TEXT_ << std::endl;
             m_dual_camera_enabled = false;
+        } else {
+            // Get RGB camera dimensions for V4L2 output
+            if (m_rgb_capture.isOpened()) {
+                m_rgb_width = static_cast<int>(m_rgb_capture.get(cv::CAP_PROP_FRAME_WIDTH));
+                m_rgb_height = static_cast<int>(m_rgb_capture.get(cv::CAP_PROP_FRAME_HEIGHT));
+                std::cout << _LOG_CONSOLE_BOLD_TEXT << "RGB camera resolution: "
+                          << _INFO_CONSOLE_BOLD_TEXT << m_rgb_width << "x" << m_rgb_height
+                          << _NORMAL_CONSOLE_TEXT_ << std::endl;
+            }
         }
     }
 
     // Initialize V4L2 output device
     // output_video_device is already translated to full path in ir_tracker_main.cpp
+    // Note: This must be called AFTER RGB camera init to get correct dimensions
     if (!initTargetVirtualVideoDevice(output_video_device)) {
         m_sender.close_port();
         if (m_rgb_capture.isOpened()) {
@@ -90,6 +99,12 @@ bool CIRTracker::initThermalCamera(const std::string& thermal_port) {
     if (!m_sender.open_port(thermal_port)) {
         std::cerr << _ERROR_CONSOLE_BOLD_TEXT_ << "Failed to open thermal port: "
                   << _INFO_CONSOLE_BOLD_TEXT << thermal_port 
+                  << _NORMAL_CONSOLE_TEXT_ << std::endl;
+        return false;
+    }
+
+    if (!m_sender.initialize_camera(true)) {
+        std::cerr << _ERROR_CONSOLE_BOLD_TEXT_ << "Failed to initialize thermal camera"
                   << _NORMAL_CONSOLE_TEXT_ << std::endl;
         return false;
     }
@@ -166,14 +181,26 @@ bool CIRTracker::initTargetVirtualVideoDevice(const std::string& output_video_de
         m_image_height = g_thermal_frame.rows;
     }
 
+    // Determine output dimensions based on mode
+    int output_width, output_height;
+    if (m_dual_camera_enabled && m_rgb_capture.isOpened()) {
+        // Use RGB camera dimensions for dual camera mode
+        output_width = m_rgb_width;
+        output_height = m_rgb_height;
+    } else {
+        // Use IR camera dimensions for IR-only mode
+        output_width = m_image_width;
+        output_height = m_image_height;
+    }
+
     struct v4l2_format fmt = {0};
     fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-    fmt.fmt.pix.width = m_image_width;
-    fmt.fmt.pix.height = m_image_height;
+    fmt.fmt.pix.width = output_width;
+    fmt.fmt.pix.height = output_height;
     fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
     fmt.fmt.pix.field = V4L2_FIELD_NONE;
-    fmt.fmt.pix.bytesperline = m_image_width;
-    fmt.fmt.pix.sizeimage = (m_image_width * m_image_height * 3) / 2;
+    fmt.fmt.pix.bytesperline = output_width;
+    fmt.fmt.pix.sizeimage = (output_width * output_height * 3) / 2;
 
     if (CVideo::xioctl(m_video_fd, VIDIOC_S_FMT, &fmt) < 0) {
         std::cerr << _ERROR_CONSOLE_BOLD_TEXT_ << "Failed to set video format on "
@@ -190,7 +217,7 @@ bool CIRTracker::initTargetVirtualVideoDevice(const std::string& output_video_de
               << _LOG_CONSOLE_BOLD_TEXT << " pixformat YUV420"
               << _NORMAL_CONSOLE_TEXT_ << std::endl;
 
-    m_yuv_frame_size = m_image_width * m_image_height * 3 / 2;
+    m_yuv_frame_size = output_width * output_height * 3 / 2;
     m_virtual_device_opened = true;
     return true;
 }
@@ -271,6 +298,7 @@ void CIRTracker::onThermalFrame(const std::vector<float>& temperatures,
     std::lock_guard<std::mutex> lock(g_frame_mutex);
     g_thermal_rows = rows;
     g_thermal_cols = cols;
+    g_thermal_temperatures = temperatures;
 
     // Create a matrix from temperature data
     cv::Mat frame(rows, cols, CV_32F);
@@ -288,8 +316,7 @@ void CIRTracker::onThermalFrame(const std::vector<float>& temperatures,
                     -min_temp * 255.0 / (max_temp - min_temp));
 
     // Invert and apply colormap
-    cv::Mat frame_inverted = 255 - frame_normalized;
-    cv::applyColorMap(frame_inverted, g_thermal_frame, cv::COLORMAP_JET);
+    cv::applyColorMap(frame_normalized, g_thermal_frame, cv::COLORMAP_JET);
 
     // Rotate 90 degrees clockwise
     cv::rotate(g_thermal_frame, g_thermal_frame, cv::ROTATE_90_CLOCKWISE);
@@ -306,15 +333,42 @@ void CIRTracker::findHotColdPoints(const cv::Mat& thermal_frame,
         return;
     }
 
-    // Convert back to grayscale for min/max detection
-    cv::Mat gray;
-    cv::cvtColor(thermal_frame, gray, cv::COLOR_BGR2GRAY);
+    std::vector<float> temperatures;
+    uint16_t rows, cols;
+    
+    {
+        std::lock_guard<std::mutex> lock(g_frame_mutex);
+        temperatures = g_thermal_temperatures;
+        rows = g_thermal_rows;
+        cols = g_thermal_cols;
+    }
+    
+    if (temperatures.empty()) {
+        return;
+    }
 
+    // Create a matrix from temperature data (same as in onThermalFrame)
+    cv::Mat frame(rows, cols, CV_32F);
+    for (uint16_t c = 0; c < cols; ++c) {
+        for (uint16_t r = 0; r < rows; ++r) {
+            frame.at<float>(r, c) = temperatures[c * rows + r];
+        }
+    }
+
+    // Find min and max locations on the original unrotated frame
+    cv::Point min_loc, max_loc;
     double min_val, max_val;
-    cv::minMaxLoc(gray, &min_val, &max_val, &cold_point, &hot_point);
-
+    cv::minMaxLoc(frame, &min_val, &max_val, &min_loc, &max_loc);
+    
     min_temp = static_cast<float>(min_val);
     max_temp = static_cast<float>(max_val);
+    
+    // Transform coordinates for 90-degree clockwise rotation
+    // Following advanced_display.cpp logic: new_x = (rows - 1 - old_y), new_y = old_x
+    cold_point.x = rows - 1 - min_loc.y;
+    cold_point.y = min_loc.x;
+    hot_point.x = rows - 1 - max_loc.y;
+    hot_point.y = max_loc.x;
 }
 
 cv::Mat CIRTracker::thermalToColorMap(const std::vector<float>& temperatures,
@@ -387,13 +441,29 @@ void CIRTracker::processIRFrames() {
         // Find hot and cold points on thermal frame
         findHotColdPoints(thermal_frame, hot_point, cold_point, max_temp, min_temp);
 
-        // Draw markers on thermal frame
-        cv::circle(thermal_frame, hot_point, 5, cv::Scalar(0, 0, 255), 2);
-        cv::circle(thermal_frame, cold_point, 5, cv::Scalar(255, 0, 0), 2);
-        cv::putText(thermal_frame, "HOT", cv::Point(hot_point.x + 10, hot_point.y),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 1);
-        cv::putText(thermal_frame, "COLD", cv::Point(cold_point.x + 10, cold_point.y),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
+        // Draw + markers on thermal frame
+        int marker_size = 5;
+        int marker_thickness = 2;
+        
+        // Red + for hot point
+        cv::line(thermal_frame, 
+                 cv::Point(hot_point.x - marker_size, hot_point.y), 
+                 cv::Point(hot_point.x + marker_size, hot_point.y), 
+                 cv::Scalar(0, 0, 255), marker_thickness);
+        cv::line(thermal_frame, 
+                 cv::Point(hot_point.x, hot_point.y - marker_size), 
+                 cv::Point(hot_point.x, hot_point.y + marker_size), 
+                 cv::Scalar(0, 0, 255), marker_thickness);
+        
+        // Blue + for cold point
+        cv::line(thermal_frame, 
+                 cv::Point(cold_point.x - marker_size, cold_point.y), 
+                 cv::Point(cold_point.x + marker_size, cold_point.y), 
+                 cv::Scalar(255, 0, 0), marker_thickness);
+        cv::line(thermal_frame, 
+                 cv::Point(cold_point.x, cold_point.y - marker_size), 
+                 cv::Point(cold_point.x, cold_point.y + marker_size), 
+                 cv::Scalar(255, 0, 0), marker_thickness);
 
         // Combine frames based on display mode
         if (m_dual_camera_enabled && !rgb_frame.empty()) {
@@ -427,14 +497,18 @@ void CIRTracker::processIRFrames() {
             );
         }
 
-        // Stream to V4L2 device (skip if display is enabled)
-        if (!m_display_enabled && m_virtual_device_opened && !output_frame.empty()) {
+        // Stream to V4L2 device
+        if (m_virtual_device_opened && !output_frame.empty()) {
             cv::cvtColor(output_frame, yuv_frame, cv::COLOR_BGR2YUV_I420);
             
             if (yuv_frame.isContinuous() &&
                 yuv_frame.total() * yuv_frame.elemSize() == m_yuv_frame_size) {
                 ssize_t bytes_written = write(m_video_fd, yuv_frame.data, m_yuv_frame_size);
                 if (bytes_written < 0) {
+                    std::cout << "Error: Failed to write frame to " << m_output_video_path
+                              << ": " << strerror(errno) << " (errno: " << errno << ")"
+                              << std::endl;
+
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         std::cerr << "Warning: Virtual device " << m_output_video_path
                                   << " buffer full? Try reading from it." << std::endl;
@@ -461,15 +535,15 @@ void CIRTracker::processIRFrames() {
                 std::cout << "Quit requested from display window" << std::endl;
                 m_process = false;
             }
-            else if (key == '2') {
+            else if (key == '1') {
                 m_display_mode = 2;
                 std::cout << "Mode: Side-by-side" << std::endl;
             }
-            else if (key == '3') {
+            else if (key == '2') {
                 m_display_mode = 3;
                 std::cout << "Mode: Overlay" << std::endl;
             }
-            else if (key == '4') {
+            else if (key == '3') {
                 m_display_mode = 4;
                 std::cout << "Mode: Picture-in-Picture" << std::endl;
             }
@@ -613,10 +687,26 @@ cv::Mat CIRTracker::overlayThermalOnRGB(const cv::Mat& rgb_image, const cv::Mat&
 cv::Mat CIRTracker::sideBySide(const cv::Mat& rgb_image, const cv::Mat& thermal_image) {
     cv::Mat thermal_resized;
     double scale = static_cast<double>(rgb_image.rows) / thermal_image.rows;
-    cv::resize(thermal_image, thermal_resized, cv::Size(), scale, scale, cv::INTER_LINEAR);
     
+    // Calculate new dimensions and ensure they are even (required for YUV420)
+    int new_width = static_cast<int>(thermal_image.cols * scale);
+    int new_height = static_cast<int>(thermal_image.rows * scale);
+    
+    // Round to nearest even number
+    new_width = (new_width + 1) & ~1;
+    new_height = (new_height + 1) & ~1;
+    
+    cv::resize(thermal_image, thermal_resized, cv::Size(new_width, new_height), 0, 0, cv::INTER_LINEAR);
+    
+    // Ensure result width is also even
     cv::Mat result;
     cv::hconcat(rgb_image, thermal_resized, result);
+    
+    // If concatenated result has odd width, crop by 1 pixel
+    if (result.cols % 2 != 0) {
+        result = result(cv::Rect(0, 0, result.cols - 1, result.rows));
+    }
+    
     return result;
 }
 
