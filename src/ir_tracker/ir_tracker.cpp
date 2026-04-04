@@ -7,6 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <iostream>
 
 #include "../de_common/helpers/colors.hpp"
 #include "../de_common/helpers/helpers.hpp"
@@ -235,19 +236,25 @@ void CIRTracker::destroyVirtualVideoDevice() {
 }
 
 bool CIRTracker::uninit() {
+    std::cout << _INFO_CONSOLE_TEXT << "Starting IR tracker uninitialization..." << _NORMAL_CONSOLE_TEXT_ << std::endl;
+    
+    // Stop processing first
     stop();
 
-    // Stop thermal camera streaming
+    // Stop thermal camera streaming BEFORE closing port
+    std::cout << _INFO_CONSOLE_TEXT << "Stopping thermal streaming..." << _NORMAL_CONSOLE_TEXT_ << std::endl;
     m_sender.stop_loop();
-    m_sender.stop_stream();
     
     // Wait for thermal thread to finish
     if (m_thermal_thread.joinable()) {
+        std::cout << _INFO_CONSOLE_TEXT << "Waiting for thermal thread to finish..." << _NORMAL_CONSOLE_TEXT_ << std::endl;
         m_thermal_thread.join();
+        std::cout << _SUCCESS_CONSOLE_TEXT_ << "Thermal thread finished cleanly" << _NORMAL_CONSOLE_TEXT_ << std::endl;
     }
     
+    // Close serial port last
     m_sender.close_port();
-
+    
     // Release RGB camera if opened
     if (m_rgb_capture.isOpened()) {
         m_rgb_capture.release();
@@ -259,7 +266,8 @@ bool CIRTracker::uninit() {
     if (m_virtual_device_opened || m_video_fd != -1) {
         destroyVirtualVideoDevice();
     }
-
+    
+    std::cout << _SUCCESS_CONSOLE_TEXT_ << "IR tracker uninitialization complete" << _NORMAL_CONSOLE_TEXT_ << std::endl;
     return true;
 }
 

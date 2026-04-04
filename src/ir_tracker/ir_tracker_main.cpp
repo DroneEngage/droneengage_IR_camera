@@ -344,9 +344,17 @@ bool CIRTrackerMain::uninit() {
 
   m_exit_thread = true;
 
-  m_scheduler_thread.join();
+  // Wait for scheduler thread with timeout
+  if (m_scheduler_thread.joinable()) {
+    std::cout << _INFO_CONSOLE_TEXT << "Waiting for scheduler thread to finish..." << _NORMAL_CONSOLE_TEXT_ << std::endl;
+    m_scheduler_thread.join();
+    std::cout << _SUCCESS_CONSOLE_TEXT_ << "Scheduler thread finished" << _NORMAL_CONSOLE_TEXT_ << std::endl;
+  }
 
-  m_tracker.get()->uninit();
+  // Uninitialize tracker (this will stop thermal thread)
+  if (m_tracker) {
+    m_tracker.get()->uninit();
+  }
 
   return true;
 }

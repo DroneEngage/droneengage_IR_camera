@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <signal.h>
 #include <iostream>
+#include <atomic>
 
 #include "./de_common/helpers/colors.hpp"
 #include "./de_common/helpers/helpers.hpp"
@@ -32,6 +33,8 @@ de::comm::CModule& cModule= de::comm::CModule::getInstance();
 std::time_t time_stamp;
 
 bool exit_me = false;
+std::atomic<bool> shutdown_in_progress(false);
+volatile sig_atomic_t shutdown_requested = 0;
 
 // UAVOS Current PartyID read from communicator
 std::string  PartyID;
@@ -282,8 +285,7 @@ void uninit ()
     cIRTrackerMain.uninit();
 	m_exit = true;
 
-    // end program here
-	exit(0);
+    // Don't call exit(0) here - let main loop exit naturally
 }
 
 // ------------------------------------------------------------------------------
@@ -292,17 +294,9 @@ void uninit ()
 // this function is called when you press Ctrl-C
 void quit_handler( int sig )
 {
-	std::cout << _INFO_CONSOLE_TEXT << std::endl << "TERMINATING AT USER REQUEST" <<  _NORMAL_CONSOLE_TEXT_ << std::endl;
-	
-	try 
-    {
-        exit_me = true;
-        uninit();
-	}
-	catch (int error)
-    {
-
-    }
+    (void)sig;
+    shutdown_requested = 1;
+    exit_me = true;
 }
 
 int main (int argc, char *argv[]) 
@@ -319,8 +313,16 @@ int main (int argc, char *argv[])
 
     init(argc, argv);
 
-    while (!exit_me)
-    {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    while (!shutdown_requested) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+
+    if (!shutdown_in_progress.exchange(true))
+    {
+        std::cout << _INFO_CONSOLE_TEXT << std::endl << "TERMINATING AT USER REQUEST" <<  _NORMAL_CONSOLE_TEXT_ << std::endl;
+        uninit();
+    }
+    
+    // Clean exit
+    return 0;
 }
