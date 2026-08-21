@@ -10,7 +10,7 @@
  * @brief configuration file path & name
  * 
  */
-static std::string configName = "de_ir_tracker.config.module.json";
-static std::string localConfigName = "de_ir_tracker.config.local";
+static std::string configName = "de_ir_camera.config.module.json";
+static std::string localConfigName = "de_ir_camera.config.local";
 
 #endif

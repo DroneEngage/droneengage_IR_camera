@@ -7,14 +7,14 @@
 #include "../de_common/de_databus/messages.hpp"
 #include "../de_common/helpers/colors.hpp"
 #include "../de_common/helpers/helpers.hpp"
-#include "ir_tracker.hpp"
-#include "ir_tracker_main.hpp"
-#include "ir_tracker_facade.hpp"
+#include "ir_camera.hpp"
+#include "ir_camera_main.hpp"
+#include "ir_camera_facade.hpp"
 #include "video.hpp"
 
-using namespace de::ir_tracker;
+using namespace de::ir_camera;
 
-void CIRTrackerMain::loopScheduler() {
+void CIRCameraMain::loopScheduler() {
   while (!m_exit_thread) {
     // timer each 10m sec.
     wait_time_nsec(0, 10000000);
@@ -37,7 +37,7 @@ void CIRTrackerMain::loopScheduler() {
 }
 
 
-bool CIRTrackerMain::init() {
+bool CIRCameraMain::init() {
   m_exit_thread = false;
 
   bool res = readConfigParameters();
@@ -45,9 +45,9 @@ bool CIRTrackerMain::init() {
     return false;
   }
 
-  m_tracker = std::make_unique<CIRTracker>(this);
+  m_camera = std::make_unique<CIRCamera>(this);
 
-  bool ok = m_tracker.get()->init(
+  bool ok = m_camera.get()->init(
       m_source_ir_port_device,
       m_output_video_device,
       m_frames_to_skip_between_messages,
@@ -58,24 +58,24 @@ bool CIRTrackerMain::init() {
   if (ok == false) {
     std::cout << _ERROR_CONSOLE_BOLD_TEXT_
               << "FATAL ERROR:" << _INFO_CONSOLE_TEXT
-              << " Failed to initialize IR tracker. " << _NORMAL_CONSOLE_TEXT_
+              << " Failed to initialize IR camera. " << _NORMAL_CONSOLE_TEXT_
               << std::endl;
     return false;
   }
 
   // Set calibration parameters if dual camera is enabled
   if (m_dual_camera_enabled) {
-    CIRTracker::CalibrationParams calib;
+    CIRCamera::CalibrationParams calib;
     calib.scale_x = m_calib_scale_x;
     calib.scale_y = m_calib_scale_y;
     calib.offset_x = m_calib_offset_x;
     calib.offset_y = m_calib_offset_y;
     calib.rotation = m_calib_rotation;
     calib.alpha = m_calib_alpha;
-    m_tracker.get()->setCalibrationParams(calib);
+    m_camera.get()->setCalibrationParams(calib);
   }
 
-  m_tracker.get()->start();
+  m_camera.get()->start();
 
   m_scheduler_thread = std::thread{[&]() { loopScheduler(); }};
 
@@ -83,7 +83,7 @@ bool CIRTrackerMain::init() {
 }
 
 
-void CIRTrackerMain::reloadParametersIfConfigChanged() {
+void CIRCameraMain::reloadParametersIfConfigChanged() {
     Json_de m_jsonConfig = CConfigFile::getInstance().GetConfigJSON();
     if (!m_jsonConfig.contains("tracking")) {
     std::cout << _ERROR_CONSOLE_BOLD_TEXT_
@@ -98,25 +98,25 @@ void CIRTrackerMain::reloadParametersIfConfigChanged() {
   Json_de tracking = m_jsonConfig["tracking"];
   if (tracking.contains("tracking_camera_direction")) {
 
-    if (m_tracking_camera_direction > TRACKING_CAMERA_DIRECTION_UP) {
+    if (m_camera_direction > TRACKING_CAMERA_DIRECTION_UP) {
       std::cout << _ERROR_CONSOLE_BOLD_TEXT_
                 << "FATAL ERROR:" << _INFO_CONSOLE_TEXT
                 << " invalid tracking_camera_direction: "
-                << _ERROR_CONSOLE_TEXT_ << (int)m_tracking_camera_direction
+                << _ERROR_CONSOLE_TEXT_ << (int)m_camera_direction
                 << std::endl
                 << "Assuming Default Camera Forward" << _NORMAL_CONSOLE_TEXT_
                 << std::endl;
-      m_tracking_camera_direction = TRACKING_CAMERA_DIRECTION_NONE;
+      m_camera_direction = TRACKING_CAMERA_DIRECTION_NONE;
     }
     else
     {
-      m_tracking_camera_direction = tracking["tracking_camera_direction"].get<uint16_t>();
+      m_camera_direction = tracking["tracking_camera_direction"].get<uint16_t>();
     }
   }
 
    std::cout << _LOG_CONSOLE_BOLD_TEXT
             << "Using tracking_camera_direction:" << _INFO_CONSOLE_BOLD_TEXT
-            << m_tracking_camera_direction << _NORMAL_CONSOLE_TEXT_
+            << m_camera_direction << _NORMAL_CONSOLE_TEXT_
             << std::endl;
 
 
@@ -131,7 +131,7 @@ void CIRTrackerMain::reloadParametersIfConfigChanged() {
   }
 
   
-  m_camera_orientation = DEF_TRACK_ORIENTATION_DEG_0;
+  m_camera_orientation = DEF_CAMERA_ORIENTATION_DEG_0;
   if (tracking.contains("camera_orientation")) {
     m_camera_orientation = tracking["camera_orientation"].get<uint16_t>();
     
@@ -143,7 +143,7 @@ void CIRTrackerMain::reloadParametersIfConfigChanged() {
     
 }
 
-bool CIRTrackerMain::readConfigParameters() {
+bool CIRCameraMain::readConfigParameters() {
   Json_de m_jsonConfig = CConfigFile::getInstance().GetConfigJSON();
   if (!m_jsonConfig.contains("tracking")) {
     std::cout << _ERROR_CONSOLE_BOLD_TEXT_
@@ -335,7 +335,7 @@ bool CIRTrackerMain::readConfigParameters() {
 
 
 
-bool CIRTrackerMain::uninit() {
+bool CIRCameraMain::uninit() {
   // exit thread.
   if (m_exit_thread == true) {
     std::cout << "m_exit_thread == true" << std::endl;
@@ -351,45 +351,45 @@ bool CIRTrackerMain::uninit() {
     std::cout << _SUCCESS_CONSOLE_TEXT_ << "Scheduler thread finished" << _NORMAL_CONSOLE_TEXT_ << std::endl;
   }
 
-  // Uninitialize tracker (this will stop thermal thread)
-  if (m_tracker) {
-    m_tracker.get()->uninit();
+  // Uninitialize camera (this will stop thermal thread)
+  if (m_camera) {
+    m_camera.get()->uninit();
   }
 
   return true;
 }
 
 
-void CIRTrackerMain::enableTracking() {
+void CIRCameraMain::enableDetection() {
     // streaming should be always available but when enabled means enable sending hot cold points
     m_ir_status = TrackingTarget_STATUS_TRACKING_ENABLED;
     
     // ACK
-    m_ir_tracker_facade.sendTrackingTargetStatus(std::string(""), m_ir_status);
+    m_ir_camera_facade.sendIRCameraStatus(std::string(""), m_ir_status);
 }
 
-void CIRTrackerMain::stopTracking() {
+void CIRCameraMain::stopDetection() {
     m_ir_status = TrackingTarget_STATUS_TRACKING_STOPPED;
-    if (m_tracker) {
-        m_tracker.get()->stop();
+    if (m_camera) {
+        m_camera.get()->stop();
     }
     
-    m_ir_tracker_facade.sendTrackingTargetStatus(std::string(""), m_ir_status);
+    m_ir_camera_facade.sendIRCameraStatus(std::string(""), m_ir_status);
 }
 
-void CIRTrackerMain::pauseTracking() {
-    if (m_tracker) {
-        m_tracker.get()->pause();
+void CIRCameraMain::pauseDetection() {
+    if (m_camera) {
+        m_camera.get()->pause();
     }
 }
 
 
-void CIRTrackerMain::onHotColdPoints(const float& hot_x, const float& hot_y,
+void CIRCameraMain::onHotColdPoints(const float& hot_x, const float& hot_y,
                         const float& cold_x, const float& cold_y,
                         const float& max_temp, const float& min_temp,
                         const bool should_skip_message)
 {
-  if (m_tracking_camera_direction == TRACKING_CAMERA_DIRECTION_NONE) {
+  if (m_camera_direction == TRACKING_CAMERA_DIRECTION_NONE) {
     return;
   }
 
@@ -433,19 +433,19 @@ void CIRTrackerMain::onHotColdPoints(const float& hot_x, const float& hot_y,
 
   // Apply camera orientation transformation for hot point
   switch (m_camera_orientation) {
-  case DEF_TRACK_ORIENTATION_DEG_0:
+  case DEF_CAMERA_ORIENTATION_DEG_0:
     delta_hot_x = m_ema_hot_x;
     delta_hot_y = m_ema_hot_y;
     break;
-  case DEF_TRACK_ORIENTATION_DEG_90:
+  case DEF_CAMERA_ORIENTATION_DEG_90:
     delta_hot_x = m_ema_hot_y;
     delta_hot_y = -m_ema_hot_x;
     break;
-  case DEF_TRACK_ORIENTATION_DEG_180:
+  case DEF_CAMERA_ORIENTATION_DEG_180:
     delta_hot_x = -m_ema_hot_x;
     delta_hot_y = -m_ema_hot_y;
     break;
-  case DEF_TRACK_ORIENTATION_DEG_270:
+  case DEF_CAMERA_ORIENTATION_DEG_270:
     delta_hot_x = -m_ema_hot_y;
     delta_hot_y = -m_ema_hot_x;
     break;
@@ -457,19 +457,19 @@ void CIRTrackerMain::onHotColdPoints(const float& hot_x, const float& hot_y,
 
   // Apply camera orientation transformation for cold point
   switch (m_camera_orientation) {
-  case DEF_TRACK_ORIENTATION_DEG_0:
+  case DEF_CAMERA_ORIENTATION_DEG_0:
     delta_cold_x = m_ema_cold_x;
     delta_cold_y = m_ema_cold_y;
     break;
-  case DEF_TRACK_ORIENTATION_DEG_90:
+  case DEF_CAMERA_ORIENTATION_DEG_90:
     delta_cold_x = m_ema_cold_y;
     delta_cold_y = -m_ema_cold_x;
     break;
-  case DEF_TRACK_ORIENTATION_DEG_180:
+  case DEF_CAMERA_ORIENTATION_DEG_180:
     delta_cold_x = -m_ema_cold_x;
     delta_cold_y = -m_ema_cold_y;
     break;
-  case DEF_TRACK_ORIENTATION_DEG_270:
+  case DEF_CAMERA_ORIENTATION_DEG_270:
     delta_cold_x = -m_ema_cold_y;
     delta_cold_y = -m_ema_cold_x;
     break;
@@ -484,7 +484,7 @@ void CIRTrackerMain::onHotColdPoints(const float& hot_x, const float& hot_y,
     delta_cold_x = -delta_cold_x;
   }
 
-  if (m_tracking_camera_direction == TRACKING_CAMERA_DIRECTION_BACK) {
+  if (m_camera_direction == TRACKING_CAMERA_DIRECTION_BACK) {
     delta_hot_x = -delta_hot_x;
     delta_hot_y = -delta_hot_y;
     delta_cold_x = -delta_cold_x;
@@ -499,7 +499,7 @@ void CIRTrackerMain::onHotColdPoints(const float& hot_x, const float& hot_y,
 
   Json_de targets = Json_de::array();
 
-  switch (m_tracking_camera_direction) {
+  switch (m_camera_direction) {
   case TRACKING_CAMERA_DIRECTION_FRONT:
   case TRACKING_CAMERA_DIRECTION_BACK:
     targets.push_back({{"type", "hot"}, {"x", delta_hot_x}, {"y", -delta_hot_y}, {"temp", max_temp}});
@@ -531,15 +531,15 @@ void CIRTrackerMain::onHotColdPoints(const float& hot_x, const float& hot_y,
 #endif
 
   if (!should_skip_message) {
-    m_ir_tracker_facade.sendTrackingTargetsLocation(std::string(""), targets);
+    m_ir_camera_facade.sendHotColdPointsLocation(std::string(""), targets);
   }
 }
 
-void CIRTrackerMain::onIRStatusChanged(const int& status)
+void CIRCameraMain::onIRStatusChanged(const int& status)
 {
   m_ir_status = status;
 
-  m_ir_tracker_facade.sendTrackingTargetStatus(std::string(""), status);
+  m_ir_camera_facade.sendIRCameraStatus(std::string(""), status);
 
 #ifdef DDEBUG
   std::cout << _INFO_CONSOLE_BOLD_TEXT

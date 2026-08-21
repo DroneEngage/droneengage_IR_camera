@@ -1,8 +1,8 @@
-#ifndef IR_TrackerANDRUAV_MESSAGE_PARSER_H
-#define IR_TrackerANDRUAV_MESSAGE_PARSER_H
+#ifndef IR_CameraANDRUAV_MESSAGE_PARSER_H
+#define IR_CameraANDRUAV_MESSAGE_PARSER_H
 
 /**
- * @file tracker_andruav_message_parser.hpp
+ * @file ir_camera_andruav_message_parser.hpp
  * @author Mohammad S. Hefny (mohammad.hefny@gmail.com)
  * @brief
  * @version 0.1
@@ -17,31 +17,31 @@ using Json_de = nlohmann::json;
 
 #include "../de_common/de_databus/de_message_parser_base.hpp"
 
-#include "ir_tracker_main.hpp"
-#include "ir_tracker_facade.hpp"
+#include "ir_camera_main.hpp"
+#include "ir_camera_facade.hpp"
 
 namespace de
 {
-    namespace ir_tracker
+    namespace ir_camera
     {
 
-        class CIRTrackerAndruavMessageParser : public de::comm::CAndruavMessageParserBase
+        class CIRCameraAndruavMessageParser : public de::comm::CAndruavMessageParserBase
         {
         public:
-            static CIRTrackerAndruavMessageParser& getInstance()
+            static CIRCameraAndruavMessageParser& getInstance()
             {
-                static CIRTrackerAndruavMessageParser instance;
+                static CIRCameraAndruavMessageParser instance;
                 return instance;
             }
 
-            CIRTrackerAndruavMessageParser(CIRTrackerAndruavMessageParser const &) = delete;
-            void operator=(CIRTrackerAndruavMessageParser const &) = delete;
+            CIRCameraAndruavMessageParser(CIRCameraAndruavMessageParser const &) = delete;
+            void operator=(CIRCameraAndruavMessageParser const &) = delete;
 
         private:
-            CIRTrackerAndruavMessageParser() {}
+            CIRCameraAndruavMessageParser() {}
 
         public:
-            ~CIRTrackerAndruavMessageParser() {}
+            ~CIRCameraAndruavMessageParser() {}
 
         protected:
             void parseRemoteExecute(Json_de &andruav_message) override;
@@ -58,8 +58,8 @@ namespace de
             }
 
         private:
-            de::ir_tracker::CIRTrackerMain &m_ir_tracker_main = de::ir_tracker::CIRTrackerMain::getInstance();
-            de::ir_tracker::CIRTracker_Facade &m_ir_tracker_facade = de::ir_tracker::CIRTracker_Facade::getInstance();
+            de::ir_camera::CIRCameraMain &m_ir_camera_main = de::ir_camera::CIRCameraMain::getInstance();
+            de::ir_camera::CIRCamera_Facade &m_ir_camera_facade = de::ir_camera::CIRCamera_Facade::getInstance();
         };
 
     };

@@ -1,5 +1,5 @@
-#ifndef IR_TRACKER_H
-#define IR_TRACKER_H
+#ifndef IR_CAMERA_H
+#define IR_CAMERA_H
 
 #include <opencv2/opencv.hpp>
 #include <thread>
@@ -9,16 +9,16 @@
 
 #include "serial_mi48.hpp"
 
-#define DEF_TRACK_ORIENTATION_DEG_0 0
-#define DEF_TRACK_ORIENTATION_DEG_90 1
-#define DEF_TRACK_ORIENTATION_DEG_180 2
-#define DEF_TRACK_ORIENTATION_DEG_270 3
+#define DEF_CAMERA_ORIENTATION_DEG_0 0
+#define DEF_CAMERA_ORIENTATION_DEG_90 1
+#define DEF_CAMERA_ORIENTATION_DEG_180 2
+#define DEF_CAMERA_ORIENTATION_DEG_270 3
 
 namespace de
 {
-namespace ir_tracker
+namespace ir_camera
 {
-class CCallBack_IRTracker {
+class CCallBack_IRCamera {
 public:
     virtual void onHotColdPoints(const float& hot_x, const float& hot_y,
                                  const float& cold_x, const float& cold_y,
@@ -28,15 +28,15 @@ public:
     virtual void onIRStatusChanged(const int& status) = 0;
 };
 
-class CIRTracker {
+class CIRCamera {
 public:
-    CIRTracker(CCallBack_IRTracker* callback_tracker)
-        : m_callback_tracker(callback_tracker),
+    CIRCamera(CCallBack_IRCamera* callback_camera)
+        : m_callback_camera(callback_camera),
           m_output_video_path(""),
           m_output_video_active(false) {
     }
 
-    ~CIRTracker() {
+    ~CIRCamera() {
         uninit();
     }
 
@@ -79,11 +79,39 @@ public:
 
     void saveCalibrationToConfig();
     
+    // Rolling Average Filter for temporal smoothing
+    class RollingAverageFilter {
+    public:
+        RollingAverageFilter(size_t N = 3) : N_(N), buffer_() {}
+        
+        cv::Mat operator()(const cv::Mat& frame) {
+            buffer_.push_back(frame.clone());
+            if (buffer_.size() > N_) {
+                buffer_.erase(buffer_.begin());
+            }
+            
+            cv::Mat sum = cv::Mat::zeros(frame.rows, frame.cols, CV_32F);
+            for (const auto& buf : buffer_) {
+                sum += buf;
+            }
+            return sum / buffer_.size();
+        }
+
+        void setBufferSize(size_t N) {
+            N_ = N;
+            buffer_.clear();
+        }
+
+    private:
+        size_t N_;
+        std::vector<cv::Mat> buffer_;
+    };
+    
 private:
     // MI48 camera setup
     bool initThermalCamera(const std::string& thermal_port);
     
-    // V4L2 output device setup (similar to tracker)
+    // V4L2 output device setup (similar to camera module)
     bool initTargetVirtualVideoDevice(const std::string& output_video_device);
     void destroyVirtualVideoDevice();
     
@@ -119,7 +147,7 @@ private:
     std::string m_thermal_port;
     
     SerialCommandSender m_sender;
-    CCallBack_IRTracker* m_callback_tracker;
+    CCallBack_IRCamera* m_callback_camera;
     
     std::string m_output_video_path;
     bool m_output_video_active = false;
@@ -150,9 +178,14 @@ private:
     int m_rgb_width = 0;
     int m_rgb_height = 0;
     CalibrationParams m_calib_params;
+    
+    // Temporal averaging configuration
+    bool m_temporal_averaging_enabled = false;
+    int m_temporal_smooth_frames = 3;
+    RollingAverageFilter m_temporal_filter;
 };
 
 }
 }
 
-#endif // IR_TRACKER_HPP
+#endif // IR_CAMERA_HPP

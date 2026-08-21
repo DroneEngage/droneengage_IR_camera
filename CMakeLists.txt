@@ -30,7 +30,7 @@ endif()
 
 SET (__APP__VERSION__ "0.0.1")
 add_definitions( -D__APP__VERSION__="${__APP__VERSION__}")
-project(de_ir_tracker VERSION ${__APP__VERSION__})
+project(de_ir_camera VERSION ${__APP__VERSION__})
 
 
 
@@ -96,11 +96,11 @@ add_compile_definitions(
 
 # Gather all source files
 file(GLOB folder_src "./src/*.cpp")
-file(GLOB folder_tracker "./src/ir_tracker/*.cpp")
+file(GLOB folder_camera "./src/ir_camera/*.cpp")
 file(GLOB folder_uavos "./src/de_common/*.cpp")
 file(GLOB folder_uavos1 "./src/de_common/de_databus/*.cpp")
 file(GLOB folder_uavos2 "./src/de_common/helpers/*.cpp")
-set(files ${folder_src} ${folder_uavos} ${folder_uavos1} ${folder_uavos2} ${folder_tracker})
+set(files ${folder_src} ${folder_uavos} ${folder_uavos1} ${folder_uavos2} ${folder_camera})
 
 # Add the executable target and link its libraries
 add_executable(OUTPUT_BINARY ${files})
@@ -116,11 +116,11 @@ file(MAKE_DIRECTORY ${OUTPUT_DIRECTORY})
 SET(EXECUTABLE_OUTPUT_PATH ${OUTPUT_DIRECTORY})
 
 
-configure_file(de_ir_tracker.config.module.json ${OUTPUT_DIRECTORY}/de_ir_tracker.config.module.json COPYONLY)
+configure_file(de_ir_camera.config.module.json ${OUTPUT_DIRECTORY}/de_ir_camera.config.module.json COPYONLY)
 
 set_target_properties( OUTPUT_BINARY 
                 PROPERTIES 
-                    OUTPUT_NAME "de_ir_tracker"
+                    OUTPUT_NAME "de_ir_camera"
                 )
 
 message ("${Yellow}=========================================================================${ColourReset}")

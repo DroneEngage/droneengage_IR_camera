@@ -18,7 +18,7 @@
 
 #include "video.hpp"
 
-using namespace de::ir_tracker;
+using namespace de::ir_camera;
 
 namespace fs = std::filesystem; // Use a shorter alias for std::filesystem
 

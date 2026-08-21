@@ -1,13 +1,13 @@
 #include <iostream>
 #include "../de_common/de_databus/messages.hpp"
-#include "ir_tracker_andruav_message_parser.hpp"
+#include "ir_camera_andruav_message_parser.hpp"
 
-using namespace de::ir_tracker;
-
-
+using namespace de::ir_camera;
 
 
-void CIRTrackerAndruavMessageParser::parseCommand(Json_de &andruav_message, const char *full_message, const int &full_message_length, int messageType, uint32_t permission)
+
+
+void CIRCameraAndruavMessageParser::parseCommand(Json_de &andruav_message, const char *full_message, const int &full_message_length, int messageType, uint32_t permission)
 {
     const Json_de cmd = andruav_message[ANDRUAV_PROTOCOL_MESSAGE_CMD];
 
@@ -44,7 +44,7 @@ void CIRTrackerAndruavMessageParser::parseCommand(Json_de &andruav_message, cons
  *
  * @param andruav_message
  */
-void CIRTrackerAndruavMessageParser::parseRemoteExecute(Json_de &andruav_message)
+void CIRCameraAndruavMessageParser::parseRemoteExecute(Json_de &andruav_message)
 {
     const Json_de cmd = andruav_message[ANDRUAV_PROTOCOL_MESSAGE_CMD];
 

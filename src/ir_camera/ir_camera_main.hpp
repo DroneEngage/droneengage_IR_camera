@@ -1,31 +1,31 @@
-#ifndef IR_TrackerMAIN_MODULE_H
-#define IR_TrackerMAIN_MODULE_H
+#ifndef IR_CameraMAIN_MODULE_H
+#define IR_CameraMAIN_MODULE_H
 
 #include <thread>
 #include <memory>
 #include "../de_common/de_databus/messages.hpp"
 #include "../de_common/helpers/json_nlohmann.hpp"
-#include "ir_tracker.hpp"
-#include "ir_tracker_facade.hpp"
+#include "ir_camera.hpp"
+#include "ir_camera_facade.hpp"
 
 using Json_de = nlohmann::json;
 
 namespace de
 {
-namespace ir_tracker
+namespace ir_camera
 {
-    class CIRTrackerMain: public CCallBack_IRTracker
+    class CIRCameraMain: public CCallBack_IRCamera
     {
     public:
-        static CIRTrackerMain& getInstance()
+        static CIRCameraMain& getInstance()
             {
-                static CIRTrackerMain instance;
+                static CIRCameraMain instance;
 
                 return instance;
             }
 
-            CIRTrackerMain(CIRTrackerMain const&)             = delete;
-            void operator=(CIRTrackerMain const&)            = delete;
+            CIRCameraMain(CIRCameraMain const&)             = delete;
+            void operator=(CIRCameraMain const&)            = delete;
 
         
             // Note: Scott Meyers mentions in his Effective Modern
@@ -36,11 +36,11 @@ namespace ir_tracker
 
         private:
 
-            CIRTrackerMain()
+            CIRCameraMain()
             {
             }
        
-            ~CIRTrackerMain()
+            ~CIRCameraMain()
             {
                 if (m_exit_thread == false)
                 {
@@ -55,9 +55,9 @@ namespace ir_tracker
             void loopScheduler();
 
         public:
-            void enableTracking();
-            void stopTracking();
-            void pauseTracking();
+            void enableDetection();
+            void stopDetection();
+            void pauseDetection();
 
         public:
             inline bool getCameraFlipped() const
@@ -65,16 +65,16 @@ namespace ir_tracker
                 return m_camera_flipped;
             }
 
-            inline uint8_t getTrackingCameraDirection() const
+            inline uint8_t getCameraDirection() const
             {
-                return m_tracking_camera_direction;
+                return m_camera_direction;
             }
 
         public:
             //CCommon_Callback
             void OnConnectionStatusChangedWithAndruavServer (const int status) {};
         
-            // Callback from CIRTracker
+            // Callback from CIRCamera
             void onHotColdPoints(const float& hot_x, const float& hot_y,
                         const float& cold_x, const float& cold_y,
                         const float& max_temp, const float& min_temp,
@@ -103,13 +103,13 @@ namespace ir_tracker
             
             double m_ema_alpha_base = 0.3;
             
-            std::unique_ptr<de::ir_tracker::CIRTracker> m_tracker;
-            de::ir_tracker::CIRTracker_Facade& m_ir_tracker_facade = de::ir_tracker::CIRTracker_Facade::getInstance();
+            std::unique_ptr<de::ir_camera::CIRCamera> m_camera;
+            de::ir_camera::CIRCamera_Facade& m_ir_camera_facade = de::ir_camera::CIRCamera_Facade::getInstance();
 
             // Parsed configuration values
-            uint16_t m_camera_orientation = DEF_TRACK_ORIENTATION_DEG_0;
+            uint16_t m_camera_orientation = DEF_CAMERA_ORIENTATION_DEG_0;
             bool m_camera_flipped = false;
-            uint8_t m_tracking_camera_direction = TRACKING_CAMERA_DIRECTION_NONE;
+            uint8_t m_camera_direction = TRACKING_CAMERA_DIRECTION_NONE;
             
             std::string m_source_ir_port_device;
             std::string m_source_video_device;

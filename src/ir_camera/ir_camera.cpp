@@ -12,7 +12,7 @@
 #include "../de_common/helpers/colors.hpp"
 #include "../de_common/helpers/helpers.hpp"
 #include "../de_common/de_databus/configFile.hpp"
-#include "ir_tracker.hpp"
+#include "ir_camera.hpp"
 #include "video.hpp"
 
 #include "../de_common/de_databus/messages.hpp"
@@ -22,7 +22,7 @@
 #include <unistd.h>
 
 
-using namespace de::ir_tracker;
+using namespace de::ir_camera;
 
 // Global state for thermal frame handling
 std::mutex g_frame_mutex;
@@ -32,13 +32,32 @@ uint16_t g_thermal_rows = 0;
 uint16_t g_thermal_cols = 0;
 std::atomic<bool> g_frame_ready{false};
 
-bool CIRTracker::init(const std::string& thermal_port, 
+bool CIRCamera::init(const std::string& thermal_port, 
                       const std::string& output_video_device,
                       uint16_t frames_to_skip_between_messages,
                       const std::string& source_video_device,
                       bool dual_camera_enabled,
                       int display_mode,
                       bool display_enabled) {
+    
+    // Load configuration for temporal averaging
+    de::CConfigFile& config = de::CConfigFile::getInstance();
+    Json_de jsonConfig = config.GetConfigJSON();
+    
+    if (jsonConfig.contains("advanced_tracking")) {
+        const auto& advanced = jsonConfig["advanced_tracking"];
+        m_temporal_averaging_enabled = advanced.value("temporal_averaging_enabled", false);
+        m_temporal_smooth_frames = advanced.value("temporal_smooth_frames", 3);
+        
+        // Initialize temporal filter with configured parameters
+        if (m_temporal_averaging_enabled) {
+            m_temporal_filter.setBufferSize(m_temporal_smooth_frames);
+            std::cout << _LOG_CONSOLE_BOLD_TEXT << "Temporal averaging enabled with " 
+                      << _INFO_CONSOLE_BOLD_TEXT << m_temporal_smooth_frames 
+                      << _LOG_CONSOLE_BOLD_TEXT << " frames" 
+                      << _NORMAL_CONSOLE_TEXT_ << std::endl;
+        }
+    }
     
     // Enable OpenCV OpenCL acceleration if available
     cv::ocl::setUseOpenCL(true);
@@ -76,7 +95,7 @@ bool CIRTracker::init(const std::string& thermal_port,
     }
 
     // Initialize V4L2 output device
-    // output_video_device is already translated to full path in ir_tracker_main.cpp
+    // output_video_device is already translated to full path in ir_camera_main.cpp
     // Note: This must be called AFTER RGB camera init to get correct dimensions
     if (!initTargetVirtualVideoDevice(output_video_device)) {
         m_sender.close_port();
@@ -86,13 +105,13 @@ bool CIRTracker::init(const std::string& thermal_port,
         return false;
     }
 
-    std::cout << _SUCCESS_CONSOLE_BOLD_TEXT_ << "IR Tracker has been initialized."
+    std::cout << _SUCCESS_CONSOLE_BOLD_TEXT_ << "IR Camera has been initialized."
               << _NORMAL_CONSOLE_TEXT_ << std::endl;
 
     return true;
 }
 
-bool CIRTracker::initThermalCamera(const std::string& thermal_port) {
+bool CIRCamera::initThermalCamera(const std::string& thermal_port) {
     std::cout << _SUCCESS_CONSOLE_BOLD_TEXT_
               << "Thermal Camera Port:" << _LOG_CONSOLE_BOLD_TEXT << thermal_port
               << _NORMAL_CONSOLE_TEXT_ << std::endl;
@@ -133,7 +152,7 @@ bool CIRTracker::initThermalCamera(const std::string& thermal_port) {
     return true;
 }
 
-bool CIRTracker::initTargetVirtualVideoDevice(const std::string& output_video_device) {
+bool CIRCamera::initTargetVirtualVideoDevice(const std::string& output_video_device) {
     m_virtual_device_opened = false;
 
     if (output_video_device.empty()) {
@@ -226,7 +245,7 @@ bool CIRTracker::initTargetVirtualVideoDevice(const std::string& output_video_de
     return true;
 }
 
-void CIRTracker::destroyVirtualVideoDevice() {
+void CIRCamera::destroyVirtualVideoDevice() {
     if (m_video_fd != -1) {
         close(m_video_fd);
         m_video_fd = -1;
@@ -235,8 +254,8 @@ void CIRTracker::destroyVirtualVideoDevice() {
     m_virtual_device_opened = false;
 }
 
-bool CIRTracker::uninit() {
-    std::cout << _INFO_CONSOLE_TEXT << "Starting IR tracker uninitialization..." << _NORMAL_CONSOLE_TEXT_ << std::endl;
+bool CIRCamera::uninit() {
+    std::cout << _INFO_CONSOLE_TEXT << "Starting IR camera uninitialization..." << _NORMAL_CONSOLE_TEXT_ << std::endl;
     
     // Stop processing first
     stop();
@@ -267,31 +286,31 @@ bool CIRTracker::uninit() {
         destroyVirtualVideoDevice();
     }
     
-    std::cout << _SUCCESS_CONSOLE_TEXT_ << "IR tracker uninitialization complete" << _NORMAL_CONSOLE_TEXT_ << std::endl;
+    std::cout << _SUCCESS_CONSOLE_TEXT_ << "IR camera uninitialization complete" << _NORMAL_CONSOLE_TEXT_ << std::endl;
     return true;
 }
 
-void CIRTracker::pause() {
-    if (m_callback_tracker != nullptr) {
-        m_callback_tracker->onIRStatusChanged(TrackingTarget_STATUS_TRACKING_STOPPED);
+void CIRCamera::pause() {
+    if (m_callback_camera != nullptr) {
+        m_callback_camera->onIRStatusChanged(TrackingTarget_STATUS_TRACKING_STOPPED);
     }
 }
 
-void CIRTracker::stop() {
+void CIRCamera::stop() {
     if (!m_process)
         return;
     
     m_process = false;
     
-    if (m_callback_tracker != nullptr) {
-        m_callback_tracker->onIRStatusChanged(TrackingTarget_STATUS_TRACKING_STOPPED);
+    if (m_callback_camera != nullptr) {
+        m_callback_camera->onIRStatusChanged(TrackingTarget_STATUS_TRACKING_STOPPED);
     }
 
     if (m_framesThread.joinable())
         m_framesThread.join();
 }
 
-void CIRTracker::start() {
+void CIRCamera::start() {
     if (m_thermal_port.empty()) {
         return;
     }
@@ -299,7 +318,7 @@ void CIRTracker::start() {
     m_framesThread = std::thread([this]() { this->processIRFrames(); });
 }
 
-void CIRTracker::onThermalFrame(const std::vector<float>& temperatures, 
+void CIRCamera::onThermalFrame(const std::vector<float>& temperatures, 
                                 const uint16_t rows, 
                                 const uint16_t cols) {
     if (temperatures.empty()) {
@@ -339,7 +358,7 @@ void CIRTracker::onThermalFrame(const std::vector<float>& temperatures,
     g_frame_ready = true;
 }
 
-void CIRTracker::findHotColdPoints(const cv::Mat& thermal_frame,
+void CIRCamera::findHotColdPoints(const cv::Mat& thermal_frame,
                                    cv::Point& hot_point,
                                    cv::Point& cold_point,
                                    float& max_temp,
@@ -386,7 +405,7 @@ void CIRTracker::findHotColdPoints(const cv::Mat& thermal_frame,
     hot_point.y = max_loc.x;
 }
 
-cv::Mat CIRTracker::thermalToColorMap(const std::vector<float>& temperatures,
+cv::Mat CIRCamera::thermalToColorMap(const std::vector<float>& temperatures,
                                       uint16_t rows, uint16_t cols) {
     cv::Mat frame(rows, cols, CV_32F);
     for (uint16_t c = 0; c < cols; ++c) {
@@ -409,7 +428,7 @@ cv::Mat CIRTracker::thermalToColorMap(const std::vector<float>& temperatures,
     return colored;
 }
 
-void CIRTracker::processIRFrames() {
+void CIRCamera::processIRFrames() {
     cv::Mat yuv_frame;
 
     const std::chrono::milliseconds target_frame_time_ms(1000 / m_target_fps);
@@ -417,11 +436,11 @@ void CIRTracker::processIRFrames() {
     m_process = true;
     uint64_t frame_counter = 0;
 
-    if (m_callback_tracker) {
-        m_callback_tracker->onIRStatusChanged(TrackingTarget_STATUS_TRACKING_DETECTED);
+    if (m_callback_camera) {
+        m_callback_camera->onIRStatusChanged(TrackingTarget_STATUS_TRACKING_DETECTED);
     }
 
-    std::string window_name = "IR Tracker";
+    std::string window_name = "IR Camera";
     if (m_display_enabled) {
         cv::namedWindow(window_name, cv::WINDOW_AUTOSIZE);
     }
@@ -453,29 +472,43 @@ void CIRTracker::processIRFrames() {
             continue;
         }
 
+        // Apply temporal averaging to visual frame if enabled
+        cv::Mat display_frame = thermal_frame;
+        if (m_temporal_averaging_enabled) {
+            // Convert to float for averaging
+            cv::Mat thermal_float;
+            thermal_frame.convertTo(thermal_float, CV_32F);
+            
+            // Apply temporal filter
+            cv::Mat averaged_float = m_temporal_filter(thermal_float);
+            
+            // Convert back to original format
+            averaged_float.convertTo(display_frame, thermal_frame.type());
+        }
+
         // Find hot and cold points on thermal frame
         findHotColdPoints(thermal_frame, hot_point, cold_point, max_temp, min_temp);
 
-        // Draw + markers on thermal frame
+        // Draw + markers on display frame (averaged or original)
         int marker_size = 5;
         int marker_thickness = 2;
         
         // Red + for hot point
-        cv::line(thermal_frame, 
+        cv::line(display_frame, 
                  cv::Point(hot_point.x - marker_size, hot_point.y), 
                  cv::Point(hot_point.x + marker_size, hot_point.y), 
                  cv::Scalar(0, 0, 255), marker_thickness);
-        cv::line(thermal_frame, 
+        cv::line(display_frame, 
                  cv::Point(hot_point.x, hot_point.y - marker_size), 
                  cv::Point(hot_point.x, hot_point.y + marker_size), 
                  cv::Scalar(0, 0, 255), marker_thickness);
         
         // Blue + for cold point
-        cv::line(thermal_frame, 
+        cv::line(display_frame, 
                  cv::Point(cold_point.x - marker_size, cold_point.y), 
                  cv::Point(cold_point.x + marker_size, cold_point.y), 
                  cv::Scalar(255, 0, 0), marker_thickness);
-        cv::line(thermal_frame, 
+        cv::line(display_frame, 
                  cv::Point(cold_point.x, cold_point.y - marker_size), 
                  cv::Point(cold_point.x, cold_point.y + marker_size), 
                  cv::Scalar(255, 0, 0), marker_thickness);
@@ -484,31 +517,31 @@ void CIRTracker::processIRFrames() {
         if (m_dual_camera_enabled && !rgb_frame.empty()) {
             switch (m_display_mode) {
                 case 2: // Side-by-side
-                    output_frame = sideBySide(rgb_frame, thermal_frame);
+                    output_frame = sideBySide(rgb_frame, display_frame);
                     break;
                 case 3: // Overlay
-                    output_frame = overlayThermalOnRGB(rgb_frame, thermal_frame);
+                    output_frame = overlayThermalOnRGB(rgb_frame, display_frame);
                     break;
                 case 4: // Picture-in-Picture
-                    output_frame = pictureInPicture(rgb_frame, thermal_frame);
+                    output_frame = pictureInPicture(rgb_frame, display_frame);
                     break;
                 default: // Thermal only
-                    output_frame = thermal_frame;
+                    output_frame = display_frame;
                     break;
             }
         } else {
-            output_frame = thermal_frame;
+            output_frame = display_frame;
         }
 
         // Send callback with hot/cold point locations
         const bool should_skip_message = (frame_counter % m_frames_to_skip_between_messages) != 0;
         
-        if (m_callback_tracker && !should_skip_message) {
+        if (m_callback_camera && !should_skip_message) {
             std::cout << "Thermal dims: " << m_thermal_width << "x" << m_thermal_height 
                       << " | Hot px: (" << hot_point.x << "," << hot_point.y << ")"
                       << " | Cold px: (" << cold_point.x << "," << cold_point.y << ")" << std::endl;
             
-            m_callback_tracker->onHotColdPoints(
+            m_callback_camera->onHotColdPoints(
                 revScaleX(hot_point.x), revScaleY(hot_point.y),
                 revScaleX(cold_point.x), revScaleY(cold_point.y),
                 max_temp, min_temp,
@@ -636,7 +669,7 @@ void CIRTracker::processIRFrames() {
         ++frame_counter;
     }
 
-    std::cout << _LOG_CONSOLE_BOLD_TEXT << "IR tracking off" << _NORMAL_CONSOLE_TEXT_
+    std::cout << _LOG_CONSOLE_BOLD_TEXT << "IR camera stopped" << _NORMAL_CONSOLE_TEXT_
               << std::endl;
 
     if (m_display_enabled) {
@@ -644,16 +677,16 @@ void CIRTracker::processIRFrames() {
     }
 }
 
-float CIRTracker::revScaleX(const float& x) const {
+float CIRCamera::revScaleX(const float& x) const {
     return (x / m_thermal_width);
 }
 
-float CIRTracker::revScaleY(const float& y) const {
+float CIRCamera::revScaleY(const float& y) const {
     return (y / m_thermal_height);
 }
 
 // Dual camera helper methods implementation
-bool CIRTracker::initRGBCamera(const std::string& source_video_device) {
+bool CIRCamera::initRGBCamera(const std::string& source_video_device) {
     m_rgb_capture.open(source_video_device);
     if (!m_rgb_capture.isOpened()) {
         std::cout << _ERROR_CONSOLE_BOLD_TEXT_
@@ -668,7 +701,7 @@ bool CIRTracker::initRGBCamera(const std::string& source_video_device) {
     return true;
 }
 
-cv::Mat CIRTracker::stretchImage(const cv::Mat& image, double scale_x, double scale_y, 
+cv::Mat CIRCamera::stretchImage(const cv::Mat& image, double scale_x, double scale_y, 
                                   int offset_x, int offset_y, double rotation) {
     int h = image.rows;
     int w = image.cols;
@@ -688,7 +721,7 @@ cv::Mat CIRTracker::stretchImage(const cv::Mat& image, double scale_x, double sc
     return result;
 }
 
-cv::Mat CIRTracker::overlayThermalOnRGB(const cv::Mat& rgb_image, const cv::Mat& thermal_image) {
+cv::Mat CIRCamera::overlayThermalOnRGB(const cv::Mat& rgb_image, const cv::Mat& thermal_image) {
     cv::Mat thermal_resized;
     cv::resize(thermal_image, thermal_resized, rgb_image.size(), 0, 0, cv::INTER_LINEAR);
     
@@ -703,7 +736,7 @@ cv::Mat CIRTracker::overlayThermalOnRGB(const cv::Mat& rgb_image, const cv::Mat&
     return result;
 }
 
-cv::Mat CIRTracker::sideBySide(const cv::Mat& rgb_image, const cv::Mat& thermal_image) {
+cv::Mat CIRCamera::sideBySide(const cv::Mat& rgb_image, const cv::Mat& thermal_image) {
     cv::Mat thermal_resized;
     double scale = static_cast<double>(rgb_image.rows) / thermal_image.rows;
     
@@ -729,7 +762,7 @@ cv::Mat CIRTracker::sideBySide(const cv::Mat& rgb_image, const cv::Mat& thermal_
     return result;
 }
 
-cv::Mat CIRTracker::pictureInPicture(const cv::Mat& rgb_image, const cv::Mat& thermal_image, double pip_scale) {
+cv::Mat CIRCamera::pictureInPicture(const cv::Mat& rgb_image, const cv::Mat& thermal_image, double pip_scale) {
     cv::Mat result = rgb_image.clone();
     
     int pip_width = static_cast<int>(rgb_image.cols * pip_scale);
@@ -749,7 +782,7 @@ cv::Mat CIRTracker::pictureInPicture(const cv::Mat& rgb_image, const cv::Mat& th
     return result;
 }
 
-void CIRTracker::saveCalibrationToConfig() {
+void CIRCamera::saveCalibrationToConfig() {
     de::CConfigFile& config = de::CConfigFile::getInstance();
     Json_de jsonConfig = config.GetConfigJSON();
     

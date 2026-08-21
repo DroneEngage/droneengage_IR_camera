@@ -14,8 +14,8 @@
 #include "./de_common/de_databus/localConfigFile.hpp"
 #include "./de_common/de_databus/udpClient.hpp"
 #include "./de_common/de_databus/de_module.hpp"
-#include "ir_tracker/ir_tracker_main.hpp"
-#include "ir_tracker/ir_tracker_andruav_message_parser.hpp"
+#include "ir_camera/ir_camera_main.hpp"
+#include "ir_camera/ir_camera_andruav_message_parser.hpp"
 
 
 
@@ -44,8 +44,8 @@ std::string  ModuleKey;
 
 int AndruavServerConnectionStatus = SOCKET_STATUS_FREASH;
 
-de::ir_tracker::CIRTrackerMain& cIRTrackerMain = de::ir_tracker::CIRTrackerMain::getInstance();
-de::ir_tracker::CIRTrackerAndruavMessageParser& cIRTrackerAndruavMessageParser = de::ir_tracker::CIRTrackerAndruavMessageParser::getInstance();
+de::ir_camera::CIRCameraMain& cIRCameraMain = de::ir_camera::CIRCameraMain::getInstance();
+de::ir_camera::CIRCameraAndruavMessageParser& cIRCameraAndruavMessageParser = de::ir_camera::CIRCameraAndruavMessageParser::getInstance();
 
 
 de::CConfigFile& cConfigFile = de::CConfigFile::getInstance();
@@ -143,7 +143,7 @@ void onReceive (const char * message, int len, Json_de jMsg)
         }
     }
     
-    cIRTrackerAndruavMessageParser.parseMessage(jMsg, message, len);
+    cIRCameraAndruavMessageParser.parseMessage(jMsg, message, len);
     
 }
 
@@ -215,19 +215,20 @@ void initDEModule(int argc, char *argv[])
         Json_de::array(MESSAGE_FILTER)
     );
 
-    cModule.addModuleFeatures(MODULE_FEATURE_TRACKING);
+    cModule.addModuleFeatures("");
     cModule.setHardware(hardware_serial, ENUM_HARDWARE_TYPE::HARDWARE_TYPE_CPU);
     cModule.setMessageOnReceive (&onReceive);
 
-    int udp_chunk_size = DEFAULT_UDP_DATABUS_PACKET_SIZE;
-    
-    if (validateField(jsonConfig, "s2s_udp_packet_size",Json_de::value_t::string)) 
+    // 0 = auto-detect: CModule::init() picks 8192 for localhost, 1472 for remote.
+    int udp_chunk_size = 0;
+
+    if (validateField(jsonConfig, "s2s_udp_packet_size",Json_de::value_t::string))
     {
         udp_chunk_size = std::stoi(jsonConfig["s2s_udp_packet_size"].get<std::string>());
     }
     else
     {
-        std::cout << _LOG_CONSOLE_BOLD_TEXT << "WARNING:" << _INFO_CONSOLE_TEXT << " MISSING FIELD " << _ERROR_CONSOLE_BOLD_TEXT_ << "s2s_udp_packet_size " <<  _INFO_CONSOLE_TEXT << "is missing in config file. default value " << _ERROR_CONSOLE_BOLD_TEXT_  << std::to_string(DEFAULT_UDP_DATABUS_PACKET_SIZE) <<  _INFO_CONSOLE_TEXT <<  " is used." << _NORMAL_CONSOLE_TEXT_ << std::endl;    
+        std::cout << _LOG_CONSOLE_BOLD_TEXT << "WARNING:" << _INFO_CONSOLE_TEXT << " MISSING FIELD " << _ERROR_CONSOLE_BOLD_TEXT_ << "s2s_udp_packet_size " <<  _INFO_CONSOLE_TEXT << "is missing in config file. Auto-detect mode is used." << _NORMAL_CONSOLE_TEXT_ << std::endl;
     }
     
     // UDP Server
@@ -273,7 +274,7 @@ void init (int argc, char *argv[])
         cLocalConfigFile.apply();
     }
 
-    cIRTrackerMain.init();
+    cIRCameraMain.init();
 
     // should be last
     initDEModule (argc,argv);
@@ -282,7 +283,7 @@ void init (int argc, char *argv[])
 
 void uninit ()
 {
-    cIRTrackerMain.uninit();
+    cIRCameraMain.uninit();
 	m_exit = true;
 
     // Don't call exit(0) here - let main loop exit naturally

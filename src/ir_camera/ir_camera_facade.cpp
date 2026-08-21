@@ -1,10 +1,10 @@
-#include "ir_tracker_facade.hpp"
+#include "ir_camera_facade.hpp"
 #include "../de_common/helpers/colors.hpp"
-#include "ir_tracker_main.hpp"
+#include "ir_camera_main.hpp"
 
-using namespace de::ir_tracker;
+using namespace de::ir_camera;
 
-void CIRTracker_Facade::sendTrackingTargetsLocation(
+void CIRCamera_Facade::sendHotColdPointsLocation(
     const std::string &target_party_id, const Json_de targets_location) const {
   if (targets_location.empty()) {
     return;
@@ -24,13 +24,13 @@ void CIRTracker_Facade::sendTrackingTargetsLocation(
                     TYPE_AndruavMessage_TrackingTargetLocation, true);
 }
 
-void CIRTracker_Facade::sendTrackingTargetStatus(
+void CIRCamera_Facade::sendIRCameraStatus(
     const std::string &target_party_id, const int status) const {
-  de::ir_tracker::CIRTrackerMain &m_tracker_main =
-      de::ir_tracker::CIRTrackerMain::getInstance();
+  de::ir_camera::CIRCameraMain &m_camera_main =
+      de::ir_camera::CIRCameraMain::getInstance();
 
   const uint8_t tracking_camera_direction =
-      m_tracker_main.getTrackingCameraDirection();
+      m_camera_main.getCameraDirection();
   Json_de message = {
       {"a", status},
       {"b", tracking_camera_direction}

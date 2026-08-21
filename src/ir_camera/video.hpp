@@ -9,7 +9,7 @@
 
 namespace de
 {
-namespace ir_tracker
+namespace ir_camera
 {
 
 class CVideo

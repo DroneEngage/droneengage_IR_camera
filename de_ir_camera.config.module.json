@@ -14,9 +14,9 @@
         //"output_video_device": "/dev/video5",
         //"source_video_device_name": "SIM-CAM1",
         "source_ir_port": "/dev/ttyACM0",
-        //"output_video_device_name": "DE-TRK",
-        "desired_input_width": 800,
-        "desired_input_height": 600,
+        "output_video_device_name": "DE-TRK",
+        "desired_input_width": 1024,
+        "desired_input_height": 768,
         "no_display": false
     },
 
@@ -34,8 +34,7 @@
         }},
 
     "tracking": {
-        "tracker_algorithm_index": 7,
-        "camera_orientation": 0, // 0b0000 bit:0 horizontal/vertical, bits1,2: rotation (0,90,180,270)
+        "camera_orientation": 0,        // 0b0000 bit:0 horizontal/vertical, bits1,2: rotation (0,90,180,270)
         "camera_flipped": false,
         "tracking_camera_direction": 1  // none, front , back , down , up 
     },
@@ -43,6 +42,8 @@
     "advanced_tracking": {
         "frames_to_skip_between_messages": 3, //optional default: 15
         "frame_to_skip_between_track_process": 2, //optional default: 5
-        "ema_alpha_base": 0.3
+        "ema_alpha_base": 0.3,
+        "temporal_averaging_enabled": false,
+        "temporal_smooth_frames": 3
     }
 }
