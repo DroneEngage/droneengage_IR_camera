@@ -1,5 +1,7 @@
 # DroneEngage IR Camera Module
 
+[![DroneEngage - Double Camera Normal & IR](res/demo_video_thumbnail.jpg)](https://www.youtube.com/watch?v=dI4fy4F1EEQ)
+
 ## Overview
 
 The **DroneEngage IR Camera Module** (`de_ir_camera`) is a C++ module that provides thermal imaging detection and RGB+IR fusion for the DroneEngage ecosystem. It reads thermal data from an MI48 thermal sensor, detects the hottest and coldest points in each frame, optionally fuses the thermal image with an RGB camera feed, and publishes hot/cold point locations to the DroneEngage communication bus.
@@ -85,12 +87,6 @@ This creates 5 virtual devices with named labels. Modules reference these labels
 > # Find which /dev/videoN corresponds to "DE-TRK"
 > grep -l "DE-TRK" /sys/class/video4linux/*/name
 > ```
-
-## Demo
-
-[![DroneEngage - Double Camera Normal & IR](res/demo_video_thumbnail.jpg)](https://www.youtube.com/watch?v=dI4fy4F1EEQ)
-
-**DroneEngage - Double Camera Normal & IR** — demonstrates the dual-camera mode with RGB and IR thermal fusion.
 
 ## Key Features
 
