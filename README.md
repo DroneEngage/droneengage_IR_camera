@@ -88,6 +88,12 @@ This creates 5 virtual devices with named labels. Modules reference these labels
 > grep -l "DE-TRK" /sys/class/video4linux/*/name
 > ```
 
+## Demo
+
+[![DroneEngage - Double Camera Normal & IR](res/demo_video_thumbnail.jpg)](https://www.youtube.com/watch?v=dI4fy4F1EEQ)
+
+**DroneEngage - Double Camera Normal & IR** — demonstrates the dual-camera mode with RGB and IR thermal fusion.
+
 ## Key Features
 
 - **Hot/Cold Point Detection**: Real-time identification of the hottest and coldest locations in the thermal frame
