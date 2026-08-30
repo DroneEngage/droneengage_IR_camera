@@ -28,7 +28,7 @@ message( FATAL_ERROR “In-source builds not allowed! Create a build directory a
 exit(1)
 endif()
 
-SET (__APP__VERSION__ "0.9.1")
+SET (__APP__VERSION__ "0.9.2")
 add_definitions( -D__APP__VERSION__="${__APP__VERSION__}")
 project(de_ir_camera VERSION ${__APP__VERSION__})
 
